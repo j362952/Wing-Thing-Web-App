@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WingThing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: Arial, sans-serif; display: flex; align-items: center; justify-content: center; }
+        #gameContainer {
+            position: relative;
+            width: 100%; aspect-ratio: 16 / 9;
+            max-height: 100%;
+            overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* Overlay-Basis */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10;
+        }
+        .overlay.hidden { display: none; }
+
+        /* Main Menu */
+        #mainMenu {
+            background: linear-gradient(to bottom, #0D47A1, #1565C0, #1E88E5);
+            flex-direction: column;
+        }
+        #mainMenu .emoji { font-size: 72px; }
+        #mainMenu h1 { font-size: 40px; font-weight: 800; color: #fff; margin-top: 8px; }
+        #mainMenu .subtitle { font-size: 16px; color: #BBDEFB; margin-top: 2px; }
+        .btn {
+            width: 220px; height: 56px; border: none; border-radius: 14px;
+            font-size: 18px; font-weight: 700; cursor: pointer; margin-top: 16px;
+        }
+        .btn-yellow { background: #FFEB3B; color: #212121; }
+        .btn-blue   { background: #1565C0; color: #fff; }
+        .btn-lightblue { background: #1E88E5; color: #fff; }
+
+        /* Highscore Screen */
+        #highscoreScreen {
+            background: linear-gradient(to bottom, #0D47A1, #1565C0, #1E88E5);
+            flex-direction: column;
+        }
+        #highscoreScreen .emoji { font-size: 64px; }
+        #highscoreScreen h2 { font-size: 32px; font-weight: 800; color: #fff; margin-top: 16px; }
+        #highscoreScreen .score-val { font-size: 72px; font-weight: 700; color: #FFD54F; margin-top: 24px; }
+        #highscoreScreen .no-score { font-size: 15px; color: #BBDEFB; margin-top: 8px; }
+
+        /* Pause Overlay */
+        #pauseOverlay { background: rgba(0,0,0,0.53); flex-direction: column; }
+        #pauseOverlay h2 { font-size: 32px; font-weight: 800; color: #fff; }
+
+        /* Game Over Overlay */
+        #gameOverOverlay { background: rgba(0,0,0,0.67); }
+        .go-box {
+            background: #0D47A1; border-radius: 20px; padding: 32px 40px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .go-box h2 { font-size: 34px; font-weight: 800; color: #fff; }
+        .go-box .label { font-size: 16px; color: #BBDEFB; margin-top: 24px; }
+        .go-box .big-score { font-size: 52px; font-weight: 700; color: #fff; }
+        .go-box .new-hs { font-size: 16px; font-weight: 700; color: #FFD54F; margin-top: 16px; }
+        .go-box .hs-label { font-size: 14px; color: #BBDEFB; margin-top: 4px; }
+        .go-box .hs-val { font-size: 28px; font-weight: 600; color: #fff; }
+        .go-box .hs-val.gold { color: #FFD54F; }
+
+        /* Pause-Taste */
+        #pauseBtn {
+            position: absolute; top: 12px; right: 16px; z-index: 5;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(0,0,0,0.4); border: none; color: #fff;
+            font-size: 20px; cursor: pointer; display: none;
+            align-items: center; justify-content: center;
+        }
+        /* Home-Taste */
+        #homeBtn {
+            position: absolute; top: 12px; left: 16px; z-index: 5;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(0,0,0,0.4); border: none; color: #fff;
+            font-size: 22px; cursor: pointer; display: none;
+            align-items: center; justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+<canvas id="game"></canvas>
+<button id="pauseBtn">⏸</button>
+
+<!-- Main Menu -->
+<div id="mainMenu" class="overlay">
+    <span class="emoji">🐦</span>
+    <h1>WingThing</h1>
+    <span class="subtitle">Tap to fly</span>
+    <div style="margin-top:40px"></div>
+    <button class="btn btn-yellow" id="btnStart">Spiel starten</button>
+    <button class="btn btn-blue" id="btnHs">Highscore</button>
+</div>
+
+<!-- Highscore Screen -->
+<div id="highscoreScreen" class="overlay hidden">
+    <span class="emoji">🏆</span>
+    <h2>Highscore</h2>
+    <div class="score-val" id="hsValue">–</div>
+    <div class="no-score hidden" id="hsNoScore">Noch kein Score</div>
+    <button class="btn btn-blue" id="btnHsBack" style="margin-top:56px">Zurück</button>
+</div>
+
+<!-- Pause Overlay -->
+<div id="pauseOverlay" class="overlay hidden">
+    <h2>Pausiert</h2>
+    <button class="btn btn-yellow" id="btnResume" style="margin-top:32px">Spiel fortsetzen</button>
+</div>
+
+<!-- Game Over Overlay -->
+<div id="gameOverOverlay" class="overlay hidden">
+    <div class="go-box">
+        <h2>GAME OVER</h2>
+        <div class="label">Score</div>
+        <div class="big-score" id="goScore">0</div>
+        <div class="new-hs hidden" id="goNewHs">Neuer Highscore!</div>
+        <div class="hs-label">Highscore</div>
+        <div class="hs-val" id="goHsVal">0</div>
+        <button class="btn btn-lightblue" id="btnRestart" style="margin-top:32px">Nochmal spielen</button>
+    </div>
+</div>
+
+<script>
+// ── Sound Manager (Web Audio API) ────────────────────────────────────────────
+const SoundManager = (() => {
+    let ctx;
+    function getCtx() {
+        if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+        return ctx;
+    }
+    function playTone(segments, amplitude) {
+        const ac = getCtx();
+        const sampleRate = ac.sampleRate;
+        let totalSamples = 0;
+        for (const s of segments) totalSamples += Math.floor(sampleRate * s.durationMs / 1000);
+        const buf = ac.createBuffer(1, totalSamples, sampleRate);
+        const data = buf.getChannelData(0);
+        let offset = 0, phase = 0;
+        for (const seg of segments) {
+            const count = Math.floor(sampleRate * seg.durationMs / 1000);
+            for (let i = 0; i < count; i++) {
+                const progress = i / count;
+                const freq = seg.startHz + (seg.endHz - seg.startHz) * progress;
+                const env = progress < 0.05 ? progress / 0.05 : 1 - (progress - 0.05) / 0.95;
+                phase += 2 * Math.PI * freq / sampleRate;
+                data[offset + i] = amplitude * env * Math.sin(phase);
+            }
+            offset += count;
+        }
+        const src = ac.createBufferSource();
+        src.buffer = buf;
+        src.connect(ac.destination);
+        src.start();
+    }
+    return {
+        playFlap() {
+            playTone([{ startHz: 600, endHz: 950, durationMs: 65 }], 0.35);
+        },
+        playGameOver() {
+            playTone([
+                { startHz: 440, endHz: 440, durationMs: 120 },
+                { startHz: 330, endHz: 330, durationMs: 120 },
+                { startHz: 220, endHz: 180, durationMs: 200 }
+            ], 0.45);
+        }
+    };
+})();
+
+// ── Game Engine ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('game');
+const c = canvas.getContext('2d');
+
+const container = document.getElementById('gameContainer');
+let W, H;
+function resize() {
+    W = canvas.width = container.clientWidth;
+    H = canvas.height = container.clientHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Farben
+const COL_SKY       = '#1565C0';
+const COL_CLOUD1    = '#1976D2';
+const COL_CLOUD2    = '#1E88E5';
+const COL_PIPE      = '#388E3C';
+const COL_PIPE_CAP  = '#1B5E20';
+const COL_BIRD      = '#FFEB3B';
+const COL_BIRD_DEAD = '#EF5350';
+const COL_BEAK      = '#FF9800';
+
+// Wolken
+const farClouds  = [[0.08,0.12,0.20,0.06],[0.38,0.22,0.24,0.07],[0.63,0.09,0.18,0.05],[0.85,0.19,0.22,0.06]];
+const nearClouds = [[0.12,0.75,0.16,0.05],[0.48,0.82,0.20,0.06],[0.78,0.70,0.15,0.05]];
+
+// Physik & Konstanten
+const GRAVITY       = 1800;
+const FLAP_IMPULSE  = -620;
+const PIPE_WIDTH    = 50;
+const GAP_HEIGHT    = 200;
+const PIPE_SPEED    = 280;
+const SPAWN_MS      = 2200;
+const BIRD_RADIUS   = 16;
+
+// Spielzustand
+let bird, pipes, score, highScore, isAlive, isPaused, bgOffset1, bgOffset2;
+let timeSinceSpawn, lastGapTop;
+let fpsAcc, fpsFrames, fps;
+let gameRunning = false;
+
+function loadHighScore() {
+    return parseInt(localStorage.getItem('wingthing_hs') || '0', 10);
+}
+function saveHighScore(s) {
+    if (s > highScore) {
+        highScore = s;
+        localStorage.setItem('wingthing_hs', String(s));
+    }
+}
+
+function resetGame() {
+    bird = { x: W * 0.25, y: H * 0.5, vy: 0, rotation: 0 };
+    pipes = [];
+    score = 0;
+    isAlive = true;
+    isPaused = false;
+    bgOffset1 = 0;
+    bgOffset2 = 0;
+    timeSinceSpawn = SPAWN_MS;
+    lastGapTop = -1;
+    fpsAcc = 0; fpsFrames = 0; fps = 0;
+    highScore = loadHighScore();
+}
+
+function spawnPipe() {
+    const margin = H * 0.15;
+    const minGapTop = margin;
+    const maxGapTop = H - GAP_HEIGHT - margin;
+    const maxStep = H * 0.22;
+    let gapTop;
+    if (lastGapTop < 0) {
+        gapTop = Math.random() * (maxGapTop - minGapTop) + minGapTop;
+    } else {
+        const lo = Math.max(lastGapTop - maxStep, minGapTop);
+        const hi = Math.min(lastGapTop + maxStep, maxGapTop);
+        gapTop = Math.random() * (hi - lo) + lo;
+    }
+    lastGapTop = gapTop;
+    pipes.push({ x: W, gapTop, gapBottom: gapTop + GAP_HEIGHT, scored: false });
+}
+
+function checkCollision() {
+    const r = BIRD_RADIUS;
+    if (bird.y + r >= H || bird.y - r <= 0) return false;
+    for (const p of pipes) {
+        if (bird.x + r < p.x || bird.x - r > p.x + PIPE_WIDTH) continue;
+        if (bird.y - r < p.gapTop) return false;
+        if (bird.y + r > p.gapBottom) return false;
+    }
+    return true;
+}
+
+function update(dt) {
+    if (!isAlive || isPaused) return;
+    const s = dt / 1000;
+
+    // FPS
+    fpsAcc += dt;
+    fpsFrames++;
+    if (fpsAcc >= 1000) { fps = fpsFrames * 1000 / fpsAcc; fpsAcc = 0; fpsFrames = 0; }
+
+    // Vogel-Physik
+    bird.vy += GRAVITY * s;
+    bird.y += bird.vy * s;
+    const target = Math.min(80, Math.max(-25, bird.vy / 900 * 60));
+    bird.rotation += (target - bird.rotation) * Math.min(1, 9 * s);
+
+    // Pipes bewegen & filtern
+    for (const p of pipes) p.x -= PIPE_SPEED * s;
+    pipes = pipes.filter(p => p.x + PIPE_WIDTH > 0);
+
+    // Spawn
+    timeSinceSpawn += dt;
+    if (timeSinceSpawn >= SPAWN_MS) { timeSinceSpawn = 0; spawnPipe(); }
+
+    // Score
+    for (const p of pipes) {
+        if (!p.scored && p.x + PIPE_WIDTH < bird.x) { p.scored = true; score++; }
+    }
+
+    // Parallax
+    bgOffset1 += PIPE_SPEED * 0.18 * s;
+    bgOffset2 += PIPE_SPEED * 0.42 * s;
+
+    // Kollision
+    if (!checkCollision()) {
+        isAlive = false;
+        SoundManager.playGameOver();
+        saveHighScore(score);
+        showGameOver();
+    }
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+function drawClouds(clouds, offset, tileWidth, color) {
+    const offMod = offset % tileWidth;
+    c.fillStyle = color;
+    for (const cl of clouds) {
+        const cx = cl[0] * tileWidth - offMod;
+        const cy = cl[1] * H;
+        const cw = cl[2] * tileWidth;
+        const ch = cl[3] * H;
+        for (const dx of [0, tileWidth]) {
+            c.beginPath();
+            c.ellipse(cx + dx, cy, cw / 2, ch / 2, 0, 0, Math.PI * 2);
+            c.fill();
+        }
+    }
+}
+
+function drawPipes() {
+    const capH = 16;
+    for (const p of pipes) {
+        // Obere Röhre
+        c.fillStyle = COL_PIPE;
+        roundRect(p.x, 0, PIPE_WIDTH, p.gapTop, 6);
+        c.fillStyle = COL_PIPE_CAP;
+        roundRect(p.x - 4, p.gapTop - capH, PIPE_WIDTH + 8, capH, 4);
+        // Untere Röhre
+        c.fillStyle = COL_PIPE;
+        roundRect(p.x, p.gapBottom, PIPE_WIDTH, H - p.gapBottom, 6);
+        c.fillStyle = COL_PIPE_CAP;
+        roundRect(p.x - 4, p.gapBottom, PIPE_WIDTH + 8, capH, 4);
+    }
+}
+
+function roundRect(x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.lineTo(x + w - r, y);
+    c.arcTo(x + w, y, x + w, y + r, r);
+    c.lineTo(x + w, y + h - r);
+    c.arcTo(x + w, y + h, x + w - r, y + h, r);
+    c.lineTo(x + r, y + h);
+    c.arcTo(x, y + h, x, y + h - r, r);
+    c.lineTo(x, y + r);
+    c.arcTo(x, y, x + r, y, r);
+    c.closePath();
+    c.fill();
+}
+
+function drawBird() {
+    const cx = bird.x, cy = bird.y, r = BIRD_RADIUS;
+    c.save();
+    c.translate(cx, cy);
+    c.rotate(bird.rotation * Math.PI / 180);
+
+    // Körper
+    c.fillStyle = isAlive ? COL_BIRD : COL_BIRD_DEAD;
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fill();
+
+    if (isAlive) {
+        // Flügel
+        c.fillStyle = '#E6A800';
+        c.beginPath();
+        c.ellipse(-r * 0.0, r * 0.55, r * 0.6, r * 0.275, 0, 0, Math.PI * 2);
+        c.fill();
+
+        // Schnabel
+        c.fillStyle = COL_BEAK;
+        c.beginPath();
+        c.moveTo(r * 0.85, -r * 0.18);
+        c.lineTo(r * 1.65, 0);
+        c.lineTo(r * 0.85, r * 0.18);
+        c.closePath();
+        c.fill();
+
+        // Auge
+        c.fillStyle = '#fff';
+        c.beginPath();
+        c.arc(r * 0.32, -r * 0.22, r * 0.32, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#000';
+        c.beginPath();
+        c.arc(r * 0.38, -r * 0.22, r * 0.16, 0, Math.PI * 2);
+        c.fill();
+    }
+
+    c.restore();
+}
+
+function drawHUD() {
+    // Score
+    c.fillStyle = '#fff';
+    c.font = 'bold 42px Arial';
+    c.textAlign = 'center';
+    c.fillText(String(score), W / 2, 60);
+
+    // FPS
+    c.font = '14px Arial';
+    c.textAlign = 'left';
+    c.fillText('FPS: ' + fps.toFixed(1), 16, 28);
+}
+
+function render() {
+    c.fillStyle = COL_SKY;
+    c.fillRect(0, 0, W, H);
+    drawClouds(farClouds, bgOffset1, W * 1.9, COL_CLOUD1);
+    drawClouds(nearClouds, bgOffset2, W * 1.6, COL_CLOUD2);
+    drawPipes();
+    drawBird();
+    drawHUD();
+}
+
+// ── Game Loop ────────────────────────────────────────────────────────────────
+let lastTime = 0;
+function loop(timestamp) {
+    if (!gameRunning) return;
+    const dt = lastTime === 0 ? 16 : timestamp - lastTime;
+    lastTime = timestamp;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+}
+
+// ── UI / Screens ─────────────────────────────────────────────────────────────
+const $mainMenu      = document.getElementById('mainMenu');
+const $highscoreScr  = document.getElementById('highscoreScreen');
+const $pauseOverlay  = document.getElementById('pauseOverlay');
+const $gameOverlay   = document.getElementById('gameOverOverlay');
+const $pauseBtn      = document.getElementById('pauseBtn');
+
+function showMenu() {
+    gameRunning = false;
+    $mainMenu.classList.remove('hidden');
+    $highscoreScr.classList.add('hidden');
+    $pauseOverlay.classList.add('hidden');
+    $gameOverlay.classList.add('hidden');
+    $pauseBtn.style.display = 'none';
+}
+
+function startGame() {
+    resize();
+    resetGame();
+    $mainMenu.classList.add('hidden');
+    $gameOverlay.classList.add('hidden');
+    $pauseOverlay.classList.add('hidden');
+    $pauseBtn.style.display = 'flex';
+    gameRunning = true;
+    lastTime = 0;
+    requestAnimationFrame(loop);
+}
+
+function showHighscore() {
+    const hs = loadHighScore();
+    document.getElementById('hsValue').textContent = hs > 0 ? String(hs) : '–';
+    document.getElementById('hsNoScore').classList.toggle('hidden', hs > 0);
+    $mainMenu.classList.add('hidden');
+    $highscoreScr.classList.remove('hidden');
+}
+
+function showGameOver() {
+    $pauseBtn.style.display = 'none';
+    document.getElementById('goScore').textContent = String(score);
+    const isNew = score >= highScore && score > 0;
+    document.getElementById('goNewHs').classList.toggle('hidden', !isNew);
+    const hsEl = document.getElementById('goHsVal');
+    hsEl.textContent = String(highScore);
+    hsEl.classList.toggle('gold', isNew);
+    $gameOverlay.classList.remove('hidden');
+}
+
+function togglePause() {
+    if (!isAlive) return;
+    isPaused = !isPaused;
+    $pauseOverlay.classList.toggle('hidden', !isPaused);
+    $pauseBtn.textContent = isPaused ? '▶' : '⏸';
+}
+
+// ── Events ───────────────────────────────────────────────────────────────────
+document.getElementById('btnStart').addEventListener('click', startGame);
+document.getElementById('btnHs').addEventListener('click', showHighscore);
+document.getElementById('btnHsBack').addEventListener('click', showMenu);
+document.getElementById('btnResume').addEventListener('click', togglePause);
+document.getElementById('btnRestart').addEventListener('click', startGame);
+$pauseBtn.addEventListener('click', togglePause);
+
+// Tap / Click / Space zum Fliegen
+function onTap(e) {
+    if (!gameRunning || !isAlive || isPaused) return;
+    // Nicht fliegen wenn auf Pause-Button geklickt
+    if (e && e.target && e.target.id === 'pauseBtn') return;
+    bird.vy = FLAP_IMPULSE;
+    SoundManager.playFlap();
+}
+
+canvas.addEventListener('pointerdown', onTap);
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); onTap(); }
+    if ((e.code === 'Escape' || e.code === 'KeyP') && gameRunning && isAlive) {
+        e.preventDefault();
+        togglePause();
+    }
+});
+
+// Start: Menü anzeigen
+showMenu();
+</script>
+</div>
+</body>
+</html>
